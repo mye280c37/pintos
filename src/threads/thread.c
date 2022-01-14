@@ -202,7 +202,7 @@ thread_create (const char *name, int priority,
   thread_unblock (t);
 
   // prj1
-  if(priority > thread_current()->priority) thread_yield();
+  priority_preemptive_check();
 
   return tid;
 }
@@ -339,6 +339,7 @@ void
 thread_set_priority (int new_priority) 
 {
   thread_current ()->priority = new_priority;
+  priority_preemptive_check();
 }
 
 /* Returns the current thread's priority. */
@@ -495,8 +496,10 @@ next_thread_to_run (void)
 {
   if (list_empty (&ready_list))
     return idle_thread;
-  else
+  else{
+    list_sort(&ready_list, thread_priority_compare, NULL);
     return list_entry (list_pop_front (&ready_list), struct thread, elem);
+  }
 }
 
 /* Completes a thread switch by activating the new thread's page
@@ -592,11 +595,17 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
    auxiliary data AUX.  Returns true if A's priority is greater than B's priority, or
    false if A's priority is less than or equal to B's priority. */
 bool 
-thread_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux)
+thread_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
 {
   struct thread *A = list_entry(a, struct thread, elem);
   struct thread *B = list_entry(b, struct thread, elem);
 
-  if (A->priority > B->priority) return true;
-  return false;
+  return (A->priority > B->priority);
+}
+
+void 
+priority_preemptive_check(void)
+{
+  if(thread_current()->priority < list_entry(list_begin(&ready_list), struct thread, elem)->priority)
+    thread_yield();
 }

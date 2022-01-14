@@ -143,5 +143,6 @@ int thread_get_load_avg (void);
 
 /* proj1 */
 bool thread_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux);
+void priority_preemptive_check(void);
 
 #endif /* threads/thread.h */
