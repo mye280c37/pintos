@@ -94,7 +94,12 @@ struct thread
     struct list_elem elem;              /* List element. */
 
     /* Project1 */
-    int64_t wakeup;                      /* wake up time when thread go to sleep */
+    int64_t wakeup;                     /* wake up time when thread go to sleep */
+
+    struct lock *wait_on_lock;
+    struct list donor_list;             /* donor thread list */
+    int origin_prior;                   /* save origin priority when priority donation occur */
+    struct list_elem delem;             /* donor list element */
 
 #ifdef USERPROG
     /* Owned by userprog/process.c. */
@@ -144,5 +149,8 @@ int thread_get_load_avg (void);
 /* proj1 */
 bool thread_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux);
 void priority_preemptive_check(void);
+bool thread_donate_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux);
+void priority_donate(void);
+void priroity_donation_check(const struct lock *lock);
 
 #endif /* threads/thread.h */

@@ -338,7 +338,13 @@ thread_foreach (thread_action_func *func, void *aux)
 void
 thread_set_priority (int new_priority) 
 {
-  thread_current ()->priority = new_priority;
+  struct thread *cur = thread_current ();
+  int old_priority = cur->priority;
+  cur->priority = cur->origin_prior = new_priority;
+  if(!list_empty(&(cur-> donor_list))){
+    if(old_priority > new_priority)
+      cur->priority = old_priority;
+  }
   priority_preemptive_check();
 }
 
@@ -467,6 +473,11 @@ init_thread (struct thread *t, const char *name, int priority)
   t->stack = (uint8_t *) t + PGSIZE;
   t->priority = priority;
   t->magic = THREAD_MAGIC;
+
+  /* Project1 */
+  t->wait_on_lock = NULL;
+  t->origin_prior = priority;
+  list_init(&(t->donor_list));
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);
@@ -608,4 +619,53 @@ priority_preemptive_check(void)
 {
   if(thread_current()->priority < list_entry(list_begin(&ready_list), struct thread, elem)->priority)
     thread_yield();
+}
+
+bool thread_donate_priority_compare (const struct list_elem *a, const struct list_elem *b, void *aux UNUSED)
+{
+  struct thread *A = list_entry(a, struct thread, delem);
+  struct thread *B = list_entry(b, struct thread, delem);
+
+  return (A->priority > B->priority);
+}
+
+void priority_donate()
+{
+  struct thread *cur = thread_current();
+  struct lock *lock = cur->wait_on_lock;
+  int depth;
+
+  for(depth=0; depth<8; depth++){
+    if (!lock) break;
+    if(lock->holder && lock->holder->priority < cur->priority){
+      lock->holder->priority = cur->priority;
+      lock = lock->holder->wait_on_lock;
+    }
+    else break;
+  }
+}
+
+void priroity_donation_check(const struct lock *lock)
+{
+  struct list_elem *delem;
+  struct thread *t;
+
+  if(!list_empty(&(lock->holder->donor_list))){
+    for(delem = list_begin(&(lock->holder->donor_list)); delem != list_end(&(lock->holder->donor_list)); delem = list_next(delem)){
+      t = list_entry(delem, struct thread, delem);
+      if(t->wait_on_lock == lock){
+        list_remove(delem);
+      }
+    }
+  }
+
+  lock->holder->priority = lock->holder->origin_prior;
+  if(!list_empty(&(lock->holder->donor_list))){
+    list_sort(&(lock->holder->donor_list), thread_donate_priority_compare, NULL);
+    t = list_entry(list_begin(&(lock->holder->donor_list)), struct thread, delem);
+    if(t->priority > lock->holder->origin_prior){
+      lock->holder->priority = t->priority;
+    }
+  }
+
 }
